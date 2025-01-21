@@ -68,8 +68,7 @@ if search_query:
             # Display search results
             st.subheader("Search Results")
             article_dict = {row["ID"]: row["HEADLINE"] for row in search_results}
-            selected_article_id = st.selectbox("Select an Article:", options=list(article_dict.keys()),
-                                               format_func=lambda x: article_dict[x])
+            selected_article_id = st.selectbox("Select an Article:", options=list(article_dict.keys()), format_func=lambda x: article_dict[x])
 
             # Check if an article is selected
             if selected_article_id:
@@ -123,5 +122,4 @@ if search_query:
     except Exception as e:
         st.error(f"Error during search: {e}")
 
-# Close the session when the app stops
-st.on_session_end(lambda: snowpark_session.close())
+# No explicit session cleanup is needed here since Streamlit handles session state automatically.
