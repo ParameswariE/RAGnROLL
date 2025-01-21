@@ -122,4 +122,4 @@ if search_query:
     except Exception as e:
         st.error(f"Error during search: {e}")
 
-# No explicit session cleanup is needed here since Streamlit handles session state automatically.
+# Session cleanup is managed by Streamlit's session state.
