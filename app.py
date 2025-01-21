@@ -1,129 +1,103 @@
 # Import necessary packages
 import streamlit as st
+import json
+import re
 from snowflake.snowpark import Session
-from snowflake.snowpark.functions import col, udf
-from snowflake.snowpark.types import StringType
+from snowflake.snowpark.functions import col, parse_json
 from trulens.core import TruSession
 from trulens.connectors.snowflake import SnowflakeConnector
 from dotenv import load_dotenv
 import os
 
+# Load environment variables
 load_dotenv()
 
 CONNECTION_PARAMETERS = {
-    "account": os.getenv("SNOWFLAKE_ACCOUNT"),
-    "user": os.getenv("SNOWFLAKE_USER"),
-    "password": os.getenv("SNOWFLAKE_PASSWORD"),
-    "role": os.getenv("SNOWFLAKE_ROLE"),
-    "database": os.getenv("SNOWFLAKE_DATABASE"),
-    "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE"),
-    "schema": os.getenv("SNOWFLAKE_SCHEMA"),
+    'account': os.getenv("SNOWFLAKE_ACCOUNT"),
+    'user': os.getenv("SNOWFLAKE_USER"),
+    'password': os.getenv("SNOWFLAKE_PASSWORD"),
+    'role': os.getenv("SNOWFLAKE_ROLE"),
+    'warehouse': os.getenv("SNOWFLAKE_WAREHOUSE"),
+    'database': os.getenv("SNOWFLAKE_DATABASE"),
+    'schema': os.getenv("SNOWFLAKE_SCHEMA")
 }
 
-# Create a new session only if it doesn't exist
-if 'snowpark_session' not in st.session_state:
-    st.session_state.snowpark_session = Session.builder.configs(CONNECTION_PARAMETERS).create()
-snowpark_session = st.session_state.snowpark_session
+# Create a Snowflake session
+snowpark_session = Session.builder.configs(CONNECTION_PARAMETERS).create()
+
+# Function to extract location and store name from user query
+def extract_location_and_store(query):
+    # Simple regex to extract location and store name (can be improved with NLP)
+    location_match = re.search(r'in\s+(\w+)', query, re.IGNORECASE)
+    store_match = re.search(r'open\s+(\w+)', query, re.IGNORECASE)
+    location = location_match.group(1) if location_match else None
+    store_name = store_match.group(1) if store_match else None
+    return location, store_name
 
 # Streamlit app header
 st.title("AI-Powered News Search and Summary with TruLens and Snowflake")
 st.write("Search for articles, retrieve relevant results, and generate insightful summaries in your preferred language!")
 
-# Initialize TruLens session
+# Initialize Snowflake and TruLens sessions
 conn = SnowflakeConnector(snowpark_session=snowpark_session)
-tru = TruSession()  # Initialize TruLens
+tru_session = TruSession(connector=conn)
 
-# Define the UDF function
-def my_udf_function(x):
-    # Your function logic here
-    return x  # Example logic; replace with your actual logic
+# Chatbot input from the user
+st.header("Retail Location Analysis Chatbot")
+user_query = st.text_input("Ask a question about retail opportunities (e.g., 'Can I open Walmart in London?'):")
 
-# Register the UDF
-try:
-    snowpark_session.udf.register(my_udf_function, name="my_udf_function", return_type=StringType())
-    st.write("UDF registered successfully.")
-except Exception as e:
-    st.error(f"Error registering UDF: {e}")
+if user_query:
+    st.write(f"Analyzing query: {user_query}")
 
-# Language selection
-st.header("Choose Language")
-languages = {"English": "en", "French": "fr", "Spanish": "es", "German": "de", "Chinese": "zh"}
-selected_language = st.selectbox("Select your preferred language:", options=list(languages.keys()))
-
-# Search input from the user
-st.header("Search Articles")
-search_query = st.text_input("Enter a keyword or ask a question to find relevant articles:")
-
-if search_query:
-    st.write(f"Searching for articles related to: **{search_query}**")
-
-    # Perform a search query using Snowflake SQL
-    query = f"""
-        SELECT ID, HEADLINE, CONTENT, RELATED_ARTICLES 
-        FROM MY_NEWS_TABLE
-        WHERE CONTAINS(CONTENT, '{search_query}') OR CONTAINS(HEADLINE, '{search_query}')
-        LIMIT 5
-    """
     try:
-        search_results = snowpark_session.sql(query).collect()
-        if not search_results:
-            st.write("No relevant articles found. Try another search query.")
+        # Extract location and store name from user query
+        location, store_name = extract_location_and_store(user_query)
+        if not location or not store_name:
+            st.write("Could not extract location or store name from the query. Please try again.")
         else:
-            # Display search results
-            st.subheader("Search Results")
-            article_dict = {row["ID"]: row["HEADLINE"] for row in search_results}
-            selected_article_id = st.selectbox("Select an Article:", options=list(article_dict.keys()), format_func=lambda x: article_dict[x])
+            # Cortex Search query construction
+            search_service_name = "MY_SAFEGRAPH.PUBLIC.S"  # Update with your actual Cortex Search Service name
+            query = f"""
+                SELECT PARSE_JSON(
+                    SNOWFLAKE.CORTEX.SEARCH_PREVIEW(
+                        '{search_service_name}',
+                        '{{"query": "{location}", "columns": ["LOCATION_NAME", "CATEGORY_TAGS", "STREET_ADDRESS", "CITY", "POSTAL_CODE", "LATITUDE", "LONGITUDE", "WKT_AREA_SQ_METERS", "OPEN_HOURS", "CLOSED_ON"], "limit": 5}}'
+                    )
+                )['results'] AS results
+            """
 
-            # Check if an article is selected
-            if selected_article_id:
-                # Display selected article details
-                selected_article = next(row for row in search_results if row["ID"] == selected_article_id)
-                st.write(f"**Headline:** {selected_article['HEADLINE']}")
-                st.write(f"**Content (Snippet):** {selected_article['CONTENT'][:500]}...")  # Show first 500 characters
+            # Execute the query to get search results from Cortex Search
+            search_results = snowpark_session.sql(query).collect()
 
-                # Button to generate summary
-                if st.button("Generate Summary"):
-                    st.header("Generated Summary")
+            if not search_results:
+                st.write("No relevant data found. Try a different query.")
+            else:
+                # Parse the JSON results
+                results_list = json.loads(search_results[0]["RESULTS"])
+                if not results_list:
+                    st.write("No relevant data found. Try a different query.")
+                else:
+                    # Select the first result for simplicity
+                    selected_location = results_list[0]
+
+                    # Generate insights using Mistral LLM via Cortex AI
+                    st.subheader("Location Recommendation")
                     try:
-                        # Escape content for safe SQL usage
-                        escaped_content = selected_article["CONTENT"].replace("'", "''")
-
-                        # Generate summary using Snowflake Cortex AI
-                        summary_query = f"""
+                        # Properly format the JSON data for the query
+                        location_data = json.dumps(selected_location).replace("'", "''")
+                        insights_query = f"""
                             SELECT SNOWFLAKE.CORTEX.COMPLETE(
                                 'mistral-large2',
-                                'Summarize this text: {escaped_content}'
-                            ) AS SUMMARY
+                                'Based on the provided data, is it a good idea to open a {store_name} in {location}? {location_data}'
+                            ) AS INSIGHTS
                         """
-                        summary_result = snowpark_session.sql(summary_query).collect()
-                        summary = summary_result[0]["SUMMARY"]
-
-                        # Translate summary into selected language
-                        translation_query = f"""
-                            SELECT SNOWFLAKE.CORTEX.TRANSLATE(
-                                '{summary.replace("'", "''")}',
-                                'en',
-                                '{languages[selected_language]}'
-                            ) AS TRANSLATED_SUMMARY
-                        """
-                        translation_result = snowpark_session.sql(translation_query).collect()
-                        translated_summary = translation_result[0]["TRANSLATED_SUMMARY"]
-
-                        st.write(f"**Translated Summary ({selected_language}):**")
-                        st.write(translated_summary)
-
-                        # Like/Dislike buttons for feedback
-                        st.write("Was this summary helpful?")
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if st.button("👍 Like"):
-                                st.success("Thank you for your feedback!")
-                        with col2:
-                            if st.button("👎 Dislike"):
-                                st.error("Thank you for your feedback!")
+                        insights_result = snowpark_session.sql(insights_query).collect()
+                        insights = insights_result[0]["INSIGHTS"]
+                        st.write(insights)
                     except Exception as e:
-                        st.error(f"Error generating summary: {e}")
+                        st.error(f"Error generating insights: {e}")
     except Exception as e:
-        st.error(f"Error during search: {e}")
+        st.error(f"Error retrieving data: {e}")
 
-# Session cleanup is managed by Streamlit's session state.
+# Close the session when the app stops
+snowpark_session.close()
