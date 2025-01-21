@@ -1,0 +1,5 @@
+streamlit
+snowflake-snowpark-python
+snowflake-connector-python
+snoflake-ml-python
+trulens-connectors-snowflake
