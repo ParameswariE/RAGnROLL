@@ -28,7 +28,7 @@ snowpark_session = Session.builder.configs(CONNECTION_PARAMETERS).create()
 atexit.register(lambda: snowpark_session.close())
 
 # Streamlit app header
-st.title("AI-Powered News Search and Summary with TruLens and Snowflake")
+st.title("AI-Powered News Search and Summary")
 st.write("Search for articles, retrieve relevant results, and generate insightful summaries in your preferred language!")
 
 # Initialize Snowflake and TruLens sessions
