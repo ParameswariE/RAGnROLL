@@ -33,6 +33,15 @@ snowpark_session = get_active_session()
 conn = SnowflakeConnector(snowpark_session=snowpark_session)
 tru = Tru()  # Initialize TruLens
 
+# Specify the session when calling udf or using decorator 
+@udf(session=snowpark_session) 
+def my_udf_function(x):
+    # Your function logic here
+    pass
+
+# Register the UDF 
+snowpark_session.udf.register(my_udf_function)
+
 # Language selection
 st.header("Choose Language")
 languages = {"English": "en", "French": "fr", "Spanish": "es", "German": "de", "Chinese": "zh"}
