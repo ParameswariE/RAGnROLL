@@ -43,8 +43,8 @@ conn = SnowflakeConnector(snowpark_session=snowpark_session)
 tru_session = TruSession(connector=conn)
 
 # Chatbot input from the user
-st.header("Retail Location Analysis Chatbot")
-user_query = st.text_input("Ask a question about retail opportunities (e.g., 'Can I open Walmart in London?'):")
+st.header("News Search Chatbot")
+user_query = st.text_input("Enter a keyword or ask a question to find relevant articles (e.g., 'Can I find news about climate change?'):")
 
 if user_query:
     st.write(f"Analyzing query: {user_query}")
@@ -56,12 +56,12 @@ if user_query:
             st.write("Could not extract location or store name from the query. Please try again.")
         else:
             # Cortex Search query construction
-            search_service_name = "MY_SAFEGRAPH.PUBLIC.S"  # Update with your actual Cortex Search Service name
+            search_service_name = "MY_NEWS_TABLE"  # Use your actual table name here
             query = f"""
                 SELECT PARSE_JSON(
                     SNOWFLAKE.CORTEX.SEARCH_PREVIEW(
                         '{search_service_name}',
-                        '{{"query": "{location}", "columns": ["LOCATION_NAME", "CATEGORY_TAGS", "STREET_ADDRESS", "CITY", "POSTAL_CODE", "LATITUDE", "LONGITUDE", "WKT_AREA_SQ_METERS", "OPEN_HOURS", "CLOSED_ON"], "limit": 5}}'
+                        '{{"query": "{location}", "columns": ["ID", "HEADLINE", "CONTENT", "RELATED_ARTICLES"], "limit": 5}}'
                     )
                 )['results'] AS results
             """
@@ -81,14 +81,14 @@ if user_query:
                     selected_location = results_list[0]
 
                     # Generate insights using Mistral LLM via Cortex AI
-                    st.subheader("Location Recommendation")
+                    st.subheader("Article Summary")
                     try:
                         # Properly format the JSON data for the query
                         location_data = json.dumps(selected_location).replace("'", "''")
                         insights_query = f"""
                             SELECT SNOWFLAKE.CORTEX.COMPLETE(
                                 'mistral-large2',
-                                'Based on the provided data, is it a good idea to open a {store_name} in {location}? {location_data}'
+                                'Summarize the following article: {location_data}'
                             ) AS INSIGHTS
                         """
                         insights_result = snowpark_session.sql(insights_query).collect()
@@ -99,5 +99,8 @@ if user_query:
     except Exception as e:
         st.error(f"Error retrieving data: {e}")
 
-# Close the session when the app stops
-snowpark_session.close()
+# Close the session manually at the end if needed
+try:
+    snowpark_session.close()
+except Exception as e:
+    st.error(f"Error closing session: {e}")
