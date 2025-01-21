@@ -1,13 +1,11 @@
 # Import necessary packages
 import streamlit as st
-from snowflake.snowpark.context import get_active_session
+from snowflake.snowpark import Session
 from snowflake.snowpark.functions import col
 from trulens.core import Tru
 from trulens.connectors.snowflake import SnowflakeConnector
 from dotenv import load_dotenv
 import os
-from snowflake.snowpark import Session
-from snowflake.ml.utils import connection_params
 
 load_dotenv()
 
@@ -20,26 +18,27 @@ CONNECTION_PARAMETERS = {
     "warehouse": os.getenv("SNOWFLAKE_WAREHOUSE"),
     "schema": os.getenv("SNOWFLAKE_SCHEMA"),
 }
-sp_session = Session.builder.configs(CONNECTION_PARAMETERS).create()
 
+# Create a new session only if it doesn't exist
+if 'snowpark_session' not in st.session_state:
+    st.session_state.snowpark_session = Session.builder.configs(CONNECTION_PARAMETERS).create()
+snowpark_session = st.session_state.snowpark_session
 
 # Streamlit app header
 st.title("AI-Powered News Search and Summary with TruLens and Snowflake")
-st.write(
-    "Search for articles, retrieve relevant results, and generate insightful summaries in your preferred language!")
+st.write("Search for articles, retrieve relevant results, and generate insightful summaries in your preferred language!")
 
-# Initialize Snowflake and TruLens sessions
-snowpark_session = get_active_session()
+# Initialize TruLens session
 conn = SnowflakeConnector(snowpark_session=snowpark_session)
 tru = Tru()  # Initialize TruLens
 
-# Specify the session when calling udf or using decorator 
-@udf(session=snowpark_session) 
+# Specify the session when calling udf or using decorator
+@udf(session=snowpark_session)
 def my_udf_function(x):
     # Your function logic here
     pass
 
-# Register the UDF 
+# Register the UDF
 snowpark_session.udf.register(my_udf_function)
 
 # Language selection
@@ -80,49 +79,49 @@ if search_query:
                 st.write(f"**Content (Snippet):** {selected_article['CONTENT'][:500]}...")  # Show first 500 characters
 
                 # Button to generate summary
-            if st.button("Generate Summary"):
-                st.header("Generated Summary")
-                try:
-                    # Escape content for safe SQL usage
-                    escaped_content = selected_article["CONTENT"].replace("'", "''")
+                if st.button("Generate Summary"):
+                    st.header("Generated Summary")
+                    try:
+                        # Escape content for safe SQL usage
+                        escaped_content = selected_article["CONTENT"].replace("'", "''")
 
-                    # Generate summary using Snowflake Cortex AI
-                    summary_query = f"""
-                        SELECT SNOWFLAKE.CORTEX.COMPLETE(
-                            'mistral-large2',
-                            'Summarize this text: {escaped_content}'
-                        ) AS SUMMARY
-                    """
-                    summary_result = snowpark_session.sql(summary_query).collect()
-                    summary = summary_result[0]["SUMMARY"]
+                        # Generate summary using Snowflake Cortex AI
+                        summary_query = f"""
+                            SELECT SNOWFLAKE.CORTEX.COMPLETE(
+                                'mistral-large2',
+                                'Summarize this text: {escaped_content}'
+                            ) AS SUMMARY
+                        """
+                        summary_result = snowpark_session.sql(summary_query).collect()
+                        summary = summary_result[0]["SUMMARY"]
 
-                    # Translate summary into selected language
-                    translation_query = f"""
-                        SELECT SNOWFLAKE.CORTEX.TRANSLATE(
-                            '{summary.replace("'", "''")}',
-                            'en',
-                            '{languages[selected_language]}'
-                        ) AS TRANSLATED_SUMMARY
-                    """
-                    translation_result = snowpark_session.sql(translation_query).collect()
-                    translated_summary = translation_result[0]["TRANSLATED_SUMMARY"]
+                        # Translate summary into selected language
+                        translation_query = f"""
+                            SELECT SNOWFLAKE.CORTEX.TRANSLATE(
+                                '{summary.replace("'", "''")}',
+                                'en',
+                                '{languages[selected_language]}'
+                            ) AS TRANSLATED_SUMMARY
+                        """
+                        translation_result = snowpark_session.sql(translation_query).collect()
+                        translated_summary = translation_result[0]["TRANSLATED_SUMMARY"]
 
-                    st.write(f"**Translated Summary ({selected_language}):**")
-                    st.write(translated_summary)
+                        st.write(f"**Translated Summary ({selected_language}):**")
+                        st.write(translated_summary)
 
-                    # Like/Dislike buttons for feedback
-                    st.write("Was this summary helpful?")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button("👍 Like"):
-                            st.success("Thank you for your feedback!")
-                    with col2:
-                        if st.button("👎 Dislike"):
-                            st.error("Thank you for your feedback!")
-                except Exception as e:
-                    st.error(f"Error generating summary: {e}")
+                        # Like/Dislike buttons for feedback
+                        st.write("Was this summary helpful?")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("👍 Like"):
+                                st.success("Thank you for your feedback!")
+                        with col2:
+                            if st.button("👎 Dislike"):
+                                st.error("Thank you for your feedback!")
+                    except Exception as e:
+                        st.error(f"Error generating summary: {e}")
     except Exception as e:
         st.error(f"Error during search: {e}")
 
 # Close the session when the app stops
-snowpark_session.close()
+st.on_session_end(lambda: snowpark_session.close())
