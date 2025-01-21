@@ -1,7 +1,7 @@
 # Import necessary packages
 import streamlit as st
 from snowflake.snowpark import Session
-from snowflake.snowpark.functions import col
+from snowflake.snowpark.functions import col, udf
 from trulens.core import Tru
 from trulens.connectors.snowflake import SnowflakeConnector
 from dotenv import load_dotenv
