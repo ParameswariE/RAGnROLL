@@ -1,4 +1,3 @@
-# Import necessary packages
 import streamlit as st
 import json
 import re
@@ -8,6 +7,7 @@ from trulens.core import TruSession
 from trulens.connectors.snowflake import SnowflakeConnector
 from dotenv import load_dotenv
 import os
+import atexit
 
 # Load environment variables
 load_dotenv()
@@ -24,6 +24,9 @@ CONNECTION_PARAMETERS = {
 
 # Create a Snowflake session
 snowpark_session = Session.builder.configs(CONNECTION_PARAMETERS).create()
+
+# Register a cleanup function to close the session
+atexit.register(lambda: snowpark_session.close())
 
 # Function to extract location and store name from user query
 def extract_location_and_store(query):
