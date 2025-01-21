@@ -1,5 +1,3 @@
-pip install --upgrade pip
-pip>=21.0
 streamlit==1.41.1 
 snowflake-snowpark-python==1.26.0
 snowflake-connector-python==3.12.4
