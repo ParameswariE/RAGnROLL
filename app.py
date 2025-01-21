@@ -39,7 +39,11 @@ def my_udf_function(x):
     return x  # Example logic; replace with your actual logic
 
 # Register the UDF
-snowpark_session.udf.register(my_udf_function, name="my_udf_function", return_type=StringType())
+try:
+    snowpark_session.udf.register(my_udf_function, name="my_udf_function", return_type=StringType())
+    st.write("UDF registered successfully.")
+except Exception as e:
+    st.error(f"Error registering UDF: {e}")
 
 # Language selection
 st.header("Choose Language")
