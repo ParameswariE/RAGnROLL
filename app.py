@@ -2,7 +2,7 @@
 import streamlit as st
 from snowflake.snowpark import Session
 from snowflake.snowpark.functions import col, udf
-from trulens.core import Tru
+from trulens.core import TruSession
 from trulens.connectors.snowflake import SnowflakeConnector
 from dotenv import load_dotenv
 import os
@@ -30,7 +30,7 @@ st.write("Search for articles, retrieve relevant results, and generate insightfu
 
 # Initialize TruLens session
 conn = SnowflakeConnector(snowpark_session=snowpark_session)
-tru = Tru()  # Initialize TruLens
+tru = TruSession()  # Initialize TruLens
 
 # Specify the session when calling udf or using decorator
 @udf(session=snowpark_session)
