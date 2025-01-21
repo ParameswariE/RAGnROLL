@@ -2,6 +2,7 @@
 import streamlit as st
 from snowflake.snowpark import Session
 from snowflake.snowpark.functions import col, udf
+from snowflake.snowpark.types import StringType
 from trulens.core import TruSession
 from trulens.connectors.snowflake import SnowflakeConnector
 from dotenv import load_dotenv
@@ -32,11 +33,11 @@ st.write("Search for articles, retrieve relevant results, and generate insightfu
 conn = SnowflakeConnector(snowpark_session=snowpark_session)
 tru = TruSession()  # Initialize TruLens
 
-# Specify the session when calling udf or using decorator
-@udf(session=snowpark_session)
+# Specify the session when calling udf or using decorator and specify return type
+@udf(session=snowpark_session, return_type=StringType())
 def my_udf_function(x):
     # Your function logic here
-    pass
+    return x  # Example logic; replace with your actual logic
 
 # Register the UDF
 snowpark_session.udf.register(my_udf_function)
