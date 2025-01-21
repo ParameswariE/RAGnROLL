@@ -33,14 +33,13 @@ st.write("Search for articles, retrieve relevant results, and generate insightfu
 conn = SnowflakeConnector(snowpark_session=snowpark_session)
 tru = TruSession()  # Initialize TruLens
 
-# Specify the session when calling udf or using decorator and specify return type
-@udf(session=snowpark_session, return_type=StringType())
+# Define the UDF function
 def my_udf_function(x):
     # Your function logic here
     return x  # Example logic; replace with your actual logic
 
 # Register the UDF
-snowpark_session.udf.register(my_udf_function)
+snowpark_session.udf.register(my_udf_function, name="my_udf_function", return_type=StringType())
 
 # Language selection
 st.header("Choose Language")
